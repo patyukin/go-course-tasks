@@ -1,78 +1,82 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
 const (
-	permission = 0o600
-	fileName   = "input.txt"
+	permission = 0o644
+	fileName   = "output.txt"
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ch := make(chan string)
+	dataCh := make(chan string)
 
-	go readInput(ctx, ch)
-	go writeToFile(ch)
+	go readInput(ctx, dataCh)
+	go writeToFile(ctx, dataCh)
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
 
-	fmt.Printf("\nПриложение завершено.\n")
+	// Ожидаем завершения контекста
+	<-ctx.Done()
+
+	fmt.Println("Приложение завершено")
 }
 
-func readInput(ctx context.Context, ch chan<- string) {
-	scanner := bufio.NewScanner(os.Stdin)
+func readInput(ctx context.Context, dataCh chan string) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Завершение ввода...")
-			close(ch)
-
 			return
 		default:
-			if scanner.Scan() {
-				ch <- scanner.Text()
+			var input string
+			fmt.Print("Введите данные: ")
+			_, err := fmt.Scanln(&input)
+			if err != nil {
+				log.Fatalf("Error reading input: %v", err)
 			}
+
+			dataCh <- input
 		}
 	}
 }
 
-func writeToFile(ch <-chan string) {
+func writeToFile(ctx context.Context, dataCh chan string) {
 	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, permission)
 	if err != nil {
-		fmt.Println("Ошибка открытия файла:", err)
-		return
+		log.Fatalf("Error opening file: %v", err)
 	}
 
 	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			fmt.Println("Ошибка закрытия файла:", err)
+		if err = file.Close(); err != nil {
+			log.Printf("Error closing file: %v", err)
 		}
 	}(file)
 
-	writer := bufio.NewWriter(file)
-	defer func(writer *bufio.Writer) {
-		err = writer.Flush()
-		if err != nil {
-			fmt.Println("Ошибка записи в файл:", err)
-		}
-	}(writer)
-
-	for text := range ch {
-		_, err = writer.WriteString(text + "\n")
-		if err != nil {
-			fmt.Println("Ошибка записи в файл:", err)
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case data := <-dataCh:
+			if strings.TrimSpace(data) == "" {
+				continue
+			}
+
+			if _, err = file.WriteString(data + "\n"); err != nil {
+				log.Printf("Error writing to file: %v", err)
+			}
 		}
 	}
 }
