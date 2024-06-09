@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -10,39 +9,36 @@ import (
 )
 
 const (
-	permission = 0o600
-	fileName   = "input.txt"
+	permission = 0o644
+	fileName   = "output.txt"
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ch := make(chan string)
+	messageChan := make(chan string)
 
-	go readInput(ctx, ch)
-	go writeToFile(ch)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
+	go readInput(messageChan)
+	go writeToFile(messageChan)
 
+	<-signalChan
+	fmt.Println("\nЗавершение работы программы...")
+	close(messageChan)
 	fmt.Printf("\nПриложение завершено.\n")
+	// os.Exit(0)
 }
 
-func readInput(ctx context.Context, ch chan<- string) {
+func readInput(ch chan<- string) {
 	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("Завершение ввода...")
-			close(ch)
+	for scanner.Scan() {
+		text := scanner.Text()
+		fmt.Println("Чтение из консоли:", text)
+		ch <- text
+	}
 
-			return
-		default:
-			if scanner.Scan() {
-				ch <- scanner.Text()
-			}
-		}
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Ошибка чтения с консоли:", err)
 	}
 }
 
@@ -74,5 +70,6 @@ func writeToFile(ch <-chan string) {
 			fmt.Println("Ошибка записи в файл:", err)
 			return
 		}
+		fmt.Println("Запись в файл:", text)
 	}
 }
