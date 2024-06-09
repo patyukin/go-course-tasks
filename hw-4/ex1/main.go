@@ -26,7 +26,6 @@ func main() {
 	fmt.Println("\nЗавершение работы программы...")
 	close(messageChan)
 	fmt.Printf("\nПриложение завершено.\n")
-	// os.Exit(0)
 }
 
 func readInput(ch chan<- string) {
