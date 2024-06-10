@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -19,20 +20,33 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	dataCh := make(chan string)
 
-	go readInput(ctx, dataCh)
-	go writeToFile(ctx, dataCh)
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		readInput(ctx, dataCh)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		writeToFile(ctx, dataCh)
+	}()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
 		<-sigCh
+		fmt.Println("\nЗавершение работы программы...")
 		cancel()
+		wg.Wait()
 	}()
 
-	// Ожидаем завершения контекста
 	<-ctx.Done()
 
-	fmt.Println("Приложение завершено")
+	fmt.Printf("\nПриложение завершено.\n")
 }
 
 func readInput(ctx context.Context, dataCh chan string) {
