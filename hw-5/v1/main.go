@@ -37,7 +37,7 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
+	go func() { // hack - как лучше сделать?
 		<-sigCh
 		fmt.Println("\nЗавершение работы программы...")
 		cancel()

@@ -16,6 +16,7 @@ const (
 	fileName   = "output.txt"
 )
 
+// выход только через Enter (reader.ReadString('\n'))
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan string)
@@ -31,7 +32,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		writeToFile(ch)
+		writeToFile(ctx, ch)
 	}()
 
 	signalChan := make(chan os.Signal, 1)
@@ -40,10 +41,8 @@ func main() {
 	<-signalChan
 	fmt.Println("\nЗавершение работы программы...")
 
-	go func() {
-		cancel()
-		wg.Wait()
-	}()
+	cancel()
+	wg.Wait()
 
 	fmt.Printf("\nПриложение завершено.\n")
 }
@@ -70,7 +69,7 @@ func readInput(ctx context.Context, ch chan<- string) {
 	}
 }
 
-func writeToFile(ch <-chan string) {
+func writeToFile(ctx context.Context, ch <-chan string) {
 	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, permission)
 	if err != nil {
 		log.Fatal(err)
@@ -83,6 +82,13 @@ func writeToFile(ch <-chan string) {
 	}(file)
 
 	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Чтение ввода прервано")
+			return
+		default:
+		}
+
 		line := <-ch
 		if _, err = file.WriteString(line); err != nil {
 			log.Fatal(err)

@@ -21,7 +21,7 @@ func readInput(ctx context.Context, ch chan string) {
 
 	for {
 		fmt.Print("Введите данные: ")
-		tempCh := make(chan string, 1)
+		tempCh := make(chan string)
 
 		go func() {
 			input, _ := reader.ReadString('\n')

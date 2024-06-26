@@ -23,14 +23,20 @@ func main() {
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer func() {
+			fmt.Println("Closed readInput")
+			wg.Done()
+		}()
 		readInput(ctx, ch)
 	}()
 
 	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		writeToFile(ctx, ch)
+		defer func() {
+			fmt.Println("Closed writeToFile")
+			wg.Done()
+		}()
+		writeToFile(ch)
 	}()
 
 	signalChan := make(chan os.Signal, 1)
@@ -40,21 +46,19 @@ func main() {
 
 	fmt.Println("\nЗавершение работы программы...")
 
-	go func() {
-		cancel()
-		wg.Wait()
-	}()
+	cancel()
+	wg.Wait()
 
 	fmt.Printf("\nПриложение завершено.\n")
 }
 
 func readInput(ctx context.Context, ch chan<- string) {
-	defer close(ch)
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
 		select {
 		case <-ctx.Done():
+			close(ch) // hack как тут лучше сделать?
 			fmt.Println("Чтение ввода прервано")
 			return
 		default:
@@ -63,12 +67,13 @@ func readInput(ctx context.Context, ch chan<- string) {
 		fmt.Print("Введите данные: ")
 		if scanner.Scan() {
 			input := scanner.Text()
+			fmt.Println("scanner.Text()")
 			ch <- input
 		}
 	}
 }
 
-func writeToFile(ctx context.Context, inputChan <-chan string) {
+func writeToFile(inputChan <-chan string) {
 	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, permission)
 	if err != nil {
 		fmt.Println("Ошибка при создании файла:", err)
@@ -83,10 +88,8 @@ func writeToFile(ctx context.Context, inputChan <-chan string) {
 
 	for {
 		select {
-		case <-ctx.Done():
-			fmt.Println("Запись в файл прервана")
-			return
 		case input, ok := <-inputChan:
+			fmt.Println("read from inputChan")
 			if !ok {
 				return
 			}
