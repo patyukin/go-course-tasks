@@ -37,7 +37,7 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() { // hack - как лучше сделать?
+	go func() {
 		<-sigCh
 		fmt.Println("\nЗавершение работы программы...")
 		cancel()
@@ -57,8 +57,7 @@ func readInput(ctx context.Context, dataCh chan string) {
 		default:
 			var input string
 			fmt.Print("Введите данные: ")
-			_, err := fmt.Scanln(&input)
-			if err != nil {
+			if _, err := fmt.Scanln(&input); err != nil {
 				log.Fatalf("Error reading input: %v", err)
 			}
 

@@ -48,8 +48,7 @@ func writeToFile(ch chan string, fileName string) {
 	}
 
 	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
+		if err = file.Close(); err != nil {
 			fmt.Println("Ошибка при закрытии файла:", err)
 		}
 	}(file)

@@ -16,7 +16,7 @@ const (
 	fileName   = "output.txt"
 )
 
-// выход только через Enter (reader.ReadString('\n'))
+// выход только через Enter
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	ch := make(chan string)
