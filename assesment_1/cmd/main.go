@@ -1,135 +1,58 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"github.com/patyukin/go-course-tasks/assesment_1/internal/config"
+	"github.com/patyukin/go-course-tasks/assesment_1/internal/loader"
+	"github.com/patyukin/go-course-tasks/assesment_1/internal/usecase"
+	"github.com/patyukin/go-course-tasks/assesment_1/pkg/logger"
+	"log"
+	"log/slog"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
-	"time"
 )
 
-type Message struct {
-	Token  string
-	FileID string
-	Data   string
-}
-
-var validTokens = map[string]bool{
-	"token1": true,
-	"token2": true,
-	"token3": true,
-}
-
-type Cache struct {
-	mu       sync.RWMutex
-	messages map[string][]Message
-}
-
-var cache = Cache{
-	mu:       sync.RWMutex{},
-	messages: make(map[string][]Message),
-}
-
-var wg = &sync.WaitGroup{}
-
 func main() {
-	ch := make(chan Message, 100500)
-
-	go simulateUsers(ch)
-
-	wg.Add(1)
-	go worker(ch)
-
-	setupGracefulShutdown(ch)
-
-	wg.Wait()
-}
-
-func simulateUsers(ch chan<- Message) {
-	users := []string{"user1", "user2", "user3"}
-	tokens := []string{"token1", "token2", "invalid_token"}
-
-	for {
-		for i := 0; i < len(users); i++ {
-			ch <- Message{
-				Token:  tokens[i],
-				FileID: "file_" + fmt.Sprint(i),
-				Data:   "data from " + users[i],
-			}
-
-			time.Sleep(200 * time.Millisecond)
-		}
-	}
-}
-
-func worker(ch <-chan Message) {
-	defer wg.Done()
-
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case msg := <-ch:
-			if validateToken(msg.Token) {
-				cache.mu.RLock()
-				cache.messages[msg.FileID] = append(cache.messages[msg.FileID], msg)
-				cache.mu.RUnlock()
-			}
-		case <-ticker.C:
-			writeCacheToFiles()
-		}
-	}
-}
-
-func validateToken(token string) bool {
-	valid, exists := validTokens[token]
-	return exists && valid
-}
-
-func writeCacheToFiles() {
-	cache.mu.Lock()
-	defer cache.mu.Unlock()
-
-	for fileID, messages := range cache.messages {
-		writeMessagesToFile(fileID, messages)
-	}
-
-	cache.messages = make(map[string][]Message)
-}
-
-func writeMessagesToFile(fileID string, messages []Message) {
-	file, err := os.OpenFile(fileID+".txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	ctx, cancel := context.WithCancel(context.Background())
+	cfg, err := config.New()
 	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
+		log.Fatalf("Error creating config: %v", err)
 	}
-	defer file.Close()
 
-	for _, msg := range messages {
-		_, err = file.WriteString(msg.Data + "\n")
-		if err != nil {
-			fmt.Println("Error writing to file:", err)
-			return
+	l, err := logger.New(cfg)
+	if err != nil {
+		log.Fatalf("Error creating logger: %v", err)
+	}
+
+	errCh := make(chan error)
+	ldr := loader.New(cfg, l)
+	uc, err := usecase.New(ctx, ldr, cfg, l)
+	if err != nil {
+		slog.ErrorContext(ctx, "Error creating usecase: %v", err)
+		os.Exit(1)
+	}
+
+	go uc.Consume(ctx, errCh)
+	go uc.Produce(ctx, errCh)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err = <-errCh:
+		l.ErrorContext(ctx, "Error consuming messages: %v", err)
+	case res := <-sigChan:
+		if res == syscall.SIGINT || res == syscall.SIGTERM {
+			l.Info("Signal received", slog.String("signal", res.String()))
+		} else if res == syscall.SIGHUP {
+			l.Info("Signal received", slog.String("signal", res.String()))
 		}
 	}
 
-	fmt.Printf("Wrote %d messages to %s.txt\n", len(messages), fileID)
-}
+	fmt.Println("StRShutting down...")
+	cancel()
 
-func setupGracefulShutdown(ch chan<- Message) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		<-sigCh
-		fmt.Println("Graceful shutdown initiated...")
-		close(ch)
-
-		// Write remaining cache to files
-		writeCacheToFiles()
-
-		wg.Done()
-	}()
+	fmt.Println("Server stopped.")
 }
