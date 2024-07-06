@@ -17,7 +17,6 @@ type Loader interface {
 type UseCase struct {
 	inputChs    []chan model.Message
 	shutdownCh  chan struct{}
-	shutdownWg  sync.WaitGroup
 	messages    []model.Message
 	cache       model.Cache
 	validTokens map[string]bool
@@ -28,14 +27,13 @@ type UseCase struct {
 
 func New(ctx context.Context, ldr Loader, cfg *config.Config, l *slog.Logger) (*UseCase, error) {
 	validTokens, err := ldr.LoadWhiteListTokens(ctx)
-
 	if err != nil {
-		return nil, fmt.Errorf("error loading tokens: %v", err)
+		return nil, fmt.Errorf("error loading tokens: %w", err)
 	}
 
 	messages, err := ldr.LoadMessages(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error loading messages: %v", err)
+		return nil, fmt.Errorf("error loading messages: %w", err)
 	}
 
 	uc := &UseCase{
@@ -50,7 +48,7 @@ func New(ctx context.Context, ldr Loader, cfg *config.Config, l *slog.Logger) (*
 	}
 
 	for i := range uc.inputChs {
-		uc.inputChs[i] = make(chan model.Message, 100)
+		uc.inputChs[i] = make(chan model.Message)
 	}
 
 	return uc, nil

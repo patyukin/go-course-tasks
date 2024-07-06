@@ -34,12 +34,12 @@ func (l *Loader) LoadMessages(ctx context.Context) ([]model.Message, error) {
 	l.l.InfoContext(ctx, "Loading messages")
 	data, err := os.ReadFile("seed/data.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("error reading file: %v", err)
+		return nil, fmt.Errorf("error reading file: %w", err)
 	}
 
 	var cfgData Data
 	if err = yaml.Unmarshal(data, &cfgData); err != nil {
-		return nil, fmt.Errorf("error unmarshalling file: %v", err)
+		return nil, fmt.Errorf("error unmarshalling file: %w", err)
 	}
 
 	l.mu.Lock()
@@ -66,7 +66,7 @@ func (l *Loader) LoadWhiteListTokens(ctx context.Context) (map[string]bool, erro
 	l.l.InfoContext(ctx, "Loading messages")
 	file, err := os.Open("seed/valid_tokens.json")
 	if err != nil {
-		return nil, fmt.Errorf("error opening file: %v", err)
+		return nil, fmt.Errorf("error opening file: %w", err)
 	}
 
 	defer func(file *os.File) {
@@ -77,7 +77,7 @@ func (l *Loader) LoadWhiteListTokens(ctx context.Context) (map[string]bool, erro
 
 	var validTokens []string
 	if err = json.NewDecoder(file).Decode(&validTokens); err != nil {
-		return nil, fmt.Errorf("error decoding file: %v", err)
+		return nil, fmt.Errorf("error decoding file: %w", err)
 	}
 
 	l.mu.Lock()

@@ -3,13 +3,14 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"github.com/patyukin/go-course-tasks/assesment_1/internal/model"
 	"log/slog"
+
+	"github.com/patyukin/go-course-tasks/assesment_1/internal/model"
 )
 
-func (uc *UseCase) Produce(ctx context.Context, errCh chan error) {
+func (uc *UseCase) Produce(ctx context.Context) {
 	for _, ch := range uc.inputChs {
-		go uc.dispatcher(ctx, ch, errCh)
+		go uc.dispatcher(ctx, ch)
 	}
 
 	for i, message := range uc.messages {
@@ -32,7 +33,7 @@ func (uc *UseCase) closeInputChs() {
 	}
 }
 
-func (uc *UseCase) dispatcher(ctx context.Context, ch chan model.Message, errCh chan error) {
+func (uc *UseCase) dispatcher(ctx context.Context, ch chan model.Message) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -40,12 +41,12 @@ func (uc *UseCase) dispatcher(ctx context.Context, ch chan model.Message, errCh 
 			uc.closeInputChs()
 			return
 		case msg := <-ch:
-			uc.cacheMessage(msg, errCh)
+			uc.cacheMessage(msg)
 		}
 	}
 }
 
-func (uc *UseCase) cacheMessage(msg model.Message, errCh chan error) {
+func (uc *UseCase) cacheMessage(msg model.Message) {
 	if !uc.validateToken(msg.Token) {
 		fmt.Printf("Invalid token: %s\n", msg.Token)
 		return
@@ -56,7 +57,7 @@ func (uc *UseCase) cacheMessage(msg model.Message, errCh chan error) {
 	uc.mu.Unlock()
 }
 
-// validateToken проверяет валидность токена
+// validateToken проверяет валидность токена.
 func (uc *UseCase) validateToken(token string) bool {
 	_, ok := uc.validTokens[token]
 	return ok

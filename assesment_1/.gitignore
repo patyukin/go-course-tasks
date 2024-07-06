@@ -2,3 +2,4 @@ logs/*
 output/*
 .env.local
 .env.text
+/report.xml

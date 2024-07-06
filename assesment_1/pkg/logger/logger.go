@@ -3,14 +3,19 @@ package logger
 import (
 	"context"
 	"fmt"
-	"github.com/patyukin/go-course-tasks/assesment_1/internal/config"
 	"log/slog"
 	"os"
+
+	"github.com/patyukin/go-course-tasks/assesment_1/internal/config"
 )
 
 type MultiHandler struct {
 	handlers []slog.Handler
 }
+
+const (
+	filePermission = 0o666
+)
 
 func NewMultiHandler(handlers ...slog.Handler) *MultiHandler {
 	return &MultiHandler{handlers: handlers}
@@ -37,7 +42,7 @@ func (m *MultiHandler) Handle(ctx context.Context, record slog.Record) error {
 }
 
 func (m *MultiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	var handlers []slog.Handler
+	handlers := make([]slog.Handler, 0, len(m.handlers))
 	for _, h := range m.handlers {
 		handlers = append(handlers, h.WithAttrs(attrs))
 	}
@@ -46,7 +51,7 @@ func (m *MultiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 func (m *MultiHandler) WithGroup(name string) slog.Handler {
-	var handlers []slog.Handler
+	handlers := make([]slog.Handler, 0, len(m.handlers))
 	for _, h := range m.handlers {
 		handlers = append(handlers, h.WithGroup(name))
 	}
@@ -65,9 +70,9 @@ func New(cfg *config.Config) (*slog.Logger, error) {
 	handlers = append(handlers, consoleHandler)
 
 	if cfg.Env != "prod" {
-		file, err := os.OpenFile("logs/app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		file, err := os.OpenFile("logs/app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, filePermission)
 		if err != nil {
-			return nil, fmt.Errorf("error opening file: %v", err)
+			return nil, fmt.Errorf("error opening file: %w", err)
 		}
 
 		fileHandler := slog.NewJSONHandler(file, &slog.HandlerOptions{Level: level})

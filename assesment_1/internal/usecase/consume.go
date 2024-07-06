@@ -3,10 +3,16 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"github.com/patyukin/go-course-tasks/assesment_1/internal/model"
 	"log/slog"
 	"os"
 	"time"
+
+	"github.com/patyukin/go-course-tasks/assesment_1/internal/model"
+)
+
+const (
+	filePermission = 0o600
+	dirPermission  = 0o750
 )
 
 func (uc *UseCase) Consume(ctx context.Context, errCh chan error) {
@@ -16,7 +22,7 @@ func (uc *UseCase) Consume(ctx context.Context, errCh chan error) {
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		uc.l.InfoContext(ctx, "Directory does not exist. Creating...", slog.String("outputDir", outputDir))
 
-		if err = os.MkdirAll(outputDir, 0755); err != nil {
+		if err = os.MkdirAll(outputDir, dirPermission); err != nil {
 			uc.l.InfoContext(ctx, "Failed to create directory", slog.String("outputDir", outputDir))
 		}
 
@@ -48,9 +54,9 @@ func (uc *UseCase) writeCacheToFile(errCh chan error) {
 	}
 }
 
-// writeMessagesToFile записывает список сообщений в файл
+// writeMessagesToFile записывает список сообщений в файл.
 func (uc *UseCase) writeMessagesToFile(fileID string, messages []model.Message, errCh chan error) {
-	f, err := os.OpenFile("output/"+fileID, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("output/"+fileID, os.O_APPEND|os.O_CREATE|os.O_WRONLY, filePermission)
 	if err != nil {
 		fmt.Printf("Error opening file %s: %v\n", fileID, err)
 		errCh <- err
