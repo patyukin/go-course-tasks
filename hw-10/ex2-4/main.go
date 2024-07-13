@@ -14,19 +14,14 @@ type Tree struct {
 	root *Node
 }
 
-// newNode создает новый узел
-func newNode(parent *Node) *Node {
-	return &Node{
-		keys:     make([]int, 0, 3),
-		children: make([]*Node, 0, 4),
-		parent:   parent,
-	}
-}
-
 // newTree создает новое дерево
 func newTree() *Tree {
 	return &Tree{
-		root: newNode(nil),
+		root: &Node{
+			keys:     make([]int, 0, 3),
+			children: make([]*Node, 0, 4),
+			parent:   nil,
+		},
 	}
 }
 
@@ -118,6 +113,22 @@ func findChildIndex(keys []int, key int) int {
 	}
 
 	return len(keys)
+}
+
+func (n *Node) find(key int) *Node {
+	if n == nil {
+		return nil
+	}
+
+	for i, k := range n.keys {
+		if key == k {
+			return n
+		} else if key < k {
+			return n.children[i].find(key)
+		}
+	}
+
+	return n.children[len(n.keys)].find(key)
 }
 
 func main() {
