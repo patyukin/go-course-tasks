@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/redis/go-redis/v9"
-	"gopkg.in/yaml.v3"
 	"log"
 	"net"
 	"os"
@@ -13,9 +11,23 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+	"gopkg.in/yaml.v3"
 )
 
-// RateLimiter определяет структуру для хранения информации о лимитах запросов
+var (
+	errIPIsBlacklisted         = errors.New("IP is blacklisted")
+	errGlobalRateLimitExceeded = errors.New("global rate limit exceeded")
+	errPerIPRateLimitExceeded  = errors.New("per IP rate limit exceeded")
+)
+
+const (
+	Forbidden     = "Forbidden"
+	deadlineLimit = 5
+)
+
+// RateLimiter определяет структуру для хранения информации о лимитах запросов.
 type RateLimiter struct {
 	rate      int        // Количество токенов, добавляемых в ведро каждую секунду
 	bucket    int        // Максимальное количество токенов в ведре
@@ -24,7 +36,7 @@ type RateLimiter struct {
 	mu        sync.Mutex // Мьютекс для синхронизации доступа
 }
 
-// NewRateLimiter создает новый RateLimiter с заданными параметрами
+// NewRateLimiter создает новый RateLimiter с заданными параметрами.
 func NewRateLimiter(rate, bucket int) *RateLimiter {
 	return &RateLimiter{
 		rate:      rate,
@@ -34,7 +46,7 @@ func NewRateLimiter(rate, bucket int) *RateLimiter {
 	}
 }
 
-// Allow проверяет, можно ли выполнить запрос
+// Allow проверяет, можно ли выполнить запрос.
 func (rl *RateLimiter) Allow() bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -58,7 +70,7 @@ func (rl *RateLimiter) Allow() bool {
 	return false
 }
 
-// Config структура для хранения параметров конфигурации
+// Config структура для хранения параметров конфигурации.
 type Config struct {
 	Rate         int      `yaml:"rate"`
 	Bucket       int      `yaml:"bucket"`
@@ -69,23 +81,23 @@ type Config struct {
 	Blacklist    []string `yaml:"blacklist"`
 }
 
-// LoadConfig загружает конфигурацию из файла
+// LoadConfig загружает конфигурацию из файла.
 func LoadConfig(filename string) (*Config, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var config Config
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return &config, nil
 }
 
-// RateLimiters структура для хранения лимитеров запросов для каждого IP и общего лимитера
+// RateLimiters структура для хранения лимитеров запросов для каждого IP и общего лимитера.
 type RateLimiters struct {
 	client *redis.Client
 	config *Config
@@ -93,7 +105,7 @@ type RateLimiters struct {
 	global *RateLimiter
 }
 
-// NewRateLimiters создает новую структуру RateLimiters
+// NewRateLimiters создает новую структуру RateLimiters.
 func NewRateLimiters(config *Config, client *redis.Client) *RateLimiters {
 	ctx := context.Background()
 	for _, ip := range config.Whitelist {
@@ -148,7 +160,7 @@ func (rls *RateLimiters) SaveLimiterForIP(ctx context.Context, ip string, limite
 	val := fmt.Sprintf("%d:%d", limiter.tokens, limiter.lastCheck.UnixNano())
 	err := rls.client.Set(ctx, ip, val, 0).Err()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to save rate limiter for IP %s: %w", ip, err)
 	}
 
 	return nil
@@ -168,11 +180,11 @@ func checkRateLimit(ctx context.Context, conn net.Conn, rls *RateLimiters) error
 	}
 
 	if blacklisted {
-		if _, err = conn.Write([]byte("HTTP/1.1 403 Forbidden\r\n\r\nForbidden")); err != nil {
+		if _, err = conn.Write([]byte("HTTP/1.1 403 " + Forbidden + "\r\n\r\n" + Forbidden + " ip = " + ip)); err != nil {
 			return fmt.Errorf("error writing response: %w", err)
 		}
 
-		return fmt.Errorf("IP is blacklisted")
+		return errIPIsBlacklisted
 	}
 
 	// Проверка белого списка
@@ -188,27 +200,29 @@ func checkRateLimit(ctx context.Context, conn net.Conn, rls *RateLimiters) error
 			return fmt.Errorf("error writing response: %w", err)
 		}
 
-		return fmt.Errorf("global rate limit exceeded")
+		return errGlobalRateLimitExceeded
 	}
 
-	if !whitelisted {
-		ipLimiter, iplErr := rls.GetLimiterForIP(ctx, ip)
-		if iplErr != nil {
-			return fmt.Errorf("error getting rate limiter: %w", err)
+	if whitelisted {
+		return nil
+	}
+
+	ipLimiter, iplErr := rls.GetLimiterForIP(ctx, ip)
+	if iplErr != nil {
+		return fmt.Errorf("error getting rate limiter: %w", err)
+	}
+
+	if !ipLimiter.Allow() {
+		if _, err = conn.Write([]byte("HTTP/1.1 429 Too Many Requests\r\n\r\nToo Many Requests (Per IP)")); err != nil {
+			return fmt.Errorf("error writing response: %w", err)
 		}
 
-		if !ipLimiter.Allow() {
-			if _, err = conn.Write([]byte("HTTP/1.1 429 Too Many Requests\r\n\r\nToo Many Requests (Per IP)")); err != nil {
-				return fmt.Errorf("error writing response: %w", err)
-			}
+		return errPerIPRateLimitExceeded
+	}
 
-			return fmt.Errorf("per IP rate limit exceeded")
-		}
-
-		// Сохраняем новое состояние лимитера в Redis
-		if err = rls.SaveLimiterForIP(ctx, ip, ipLimiter); err != nil {
-			return fmt.Errorf("error saving rate limiter: %w", err)
-		}
+	// Сохраняем новое состояние лимитера в Redis
+	if err = rls.SaveLimiterForIP(ctx, ip, ipLimiter); err != nil {
+		return fmt.Errorf("error saving rate limiter: %w", err)
 	}
 
 	return nil
@@ -220,6 +234,12 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("Error closing connection from handleConnection:", err)
 		}
 	}(conn)
+
+	deadline := time.Now().Add(deadlineLimit * time.Second)
+	if err := conn.SetDeadline(deadline); err != nil {
+		fmt.Println("SetDeadline failed:", err)
+		return
+	}
 
 	if _, err := conn.Write([]byte("HTTP/1.1 200 OK\r\n\r\nHello, World!")); err != nil {
 		return

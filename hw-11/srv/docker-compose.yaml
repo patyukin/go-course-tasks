@@ -7,7 +7,7 @@ services:
       - "6378:6379"
 
   server:
-    build: ..
+    build: .
     restart: always
     volumes:
       - ./:/app
