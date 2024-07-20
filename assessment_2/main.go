@@ -1,24 +1,37 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 )
 
-func EvalSequence(matrix [][]int, userAnswer []int) int {
+var (
+	errMatrixEmpty                  = errors.New("пустая матрица")
+	errMatrixIsNotSquare            = errors.New("матрица не квадратная")
+	errMatrixContainsLoops          = errors.New("матрица содержит петли (ненулевая диагональ)")
+	errMatrixIsNotSymmetrical       = errors.New("матрица не симметрична")
+	errMatrixContainsNegativeValues = errors.New("матрица содержит отрицательные значения")
+	errOnlyZeroValues               = errors.New("матрица содержит только нулевые значения")
+	errPutOfRangeValues             = errors.New("ответы пользователя выходят за пределы допустимого диапазона")
+	errRepeatedAnswers              = errors.New("повторяющиеся ответы")
+	errGraphIsNotConnected          = errors.New("граф не связан")
+)
+
+func EvalSequence(matrix [][]int, userAnswer []int) (int, error) {
 	// validation
-	if !validateInput(matrix, userAnswer) {
-		return 0
+	if err := validateInput(matrix, userAnswer); err != nil {
+		return 0, fmt.Errorf("invalid input: %w", err)
 	}
 
 	maxGrade := calcMaxGrade(matrix)
 	userGrade := calcUserGrade(matrix, userAnswer)
 
 	if maxGrade == 0 {
-		return 0
+		return 0, nil
 	}
 
 	percent := userGrade * 100 / maxGrade
-	return percent
+	return percent, nil
 }
 
 // dfsForMaxGrade - dfs для поиска максимального балла
@@ -148,35 +161,30 @@ func calcUserGrade(matrix [][]int, userAnswer []int) int {
 }
 
 // validateInput - валидация входных данных
-func validateInput(matrix [][]int, userAnswer []int) bool {
+func validateInput(matrix [][]int, userAnswer []int) error {
 	size := len(matrix)
 	nonZeroFound := false
 
 	if size == 0 {
-		fmt.Println("пустая матрица")
-		return false
+		return errMatrixEmpty
 	}
 
 	for i := 0; i < size; i++ {
 		if len(matrix[i]) != size {
-			fmt.Println("матрица не квадратная")
-			return false
+			return errMatrixIsNotSquare
 		}
 
 		if matrix[i][i] != 0 {
-			fmt.Println("матрица содержит петли (ненулевая диагональ)")
-			return false
+			return errMatrixContainsLoops
 		}
 
 		for j := i + 1; j < size; j++ {
 			if matrix[i][j] != matrix[j][i] {
-				fmt.Println("матрица не симметрична")
-				return false
+				return errMatrixIsNotSymmetrical
 			}
 
 			if matrix[i][j] < 0 {
-				fmt.Println("матрица содержит отрицательные значения")
-				return false
+				return errMatrixContainsNegativeValues
 			}
 
 			if matrix[i][j] != 0 {
@@ -186,20 +194,17 @@ func validateInput(matrix [][]int, userAnswer []int) bool {
 	}
 
 	if !nonZeroFound {
-		fmt.Println("матрица содержит только нулевые значения")
-		return false
+		return errOnlyZeroValues
 	}
 
 	seen := make(map[int]struct{})
 	for _, answer := range userAnswer {
 		if answer < 0 || answer >= size {
-			fmt.Println("ответы пользователя выходят за пределы допустимого диапазона")
-			return false
+			return errPutOfRangeValues
 		}
 
 		if _, ok := seen[answer]; ok {
-			fmt.Println("повторяющиеся ответы")
-			return false
+			return errRepeatedAnswers
 		}
 
 		seen[answer] = struct{}{}
@@ -207,11 +212,10 @@ func validateInput(matrix [][]int, userAnswer []int) bool {
 
 	// Дополнительная проверка на связность графа
 	if !isGraphConnected(matrix) {
-		fmt.Println("граф не связан")
-		return false
+		return errGraphIsNotConnected
 	}
 
-	return true
+	return nil
 }
 
 func performDFS(matrix [][]int, node int, visited []bool) {

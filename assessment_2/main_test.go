@@ -12,14 +12,15 @@ BenchmarkDFSForMaxGradeMemo-12             	14624158	        80.73 ns/op
 */
 
 import (
+	"errors"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestEvalSequence(t *testing.T) {
 	type args struct {
-		mtx [][]int
-		ua  []int
+		mtx        [][]int
+		userAnswer []int
 	}
 
 	mtx1 := [][]int{
@@ -104,107 +105,125 @@ func TestEvalSequence(t *testing.T) {
 		name string
 		args args
 		want int
+		err  error
 	}{
 		{
 			name: "mtx 5 verticals 100%",
 			args: args{
-				mtx: mtx1,
-				ua:  []int{4, 1, 0, 2},
+				mtx:        mtx1,
+				userAnswer: []int{4, 1, 0, 2},
 			},
 			want: 100,
+			err:  nil,
 		},
 		{
 			name: "mtx 5 verticals 0%",
 			args: args{
-				mtx: mtx1,
-				ua:  []int{},
+				mtx:        mtx1,
+				userAnswer: []int{},
 			},
 			want: 0,
+			err:  nil,
 		},
 		{
 			name: "mtx 1 verticals 50%",
 			args: args{
-				mtx: mtx1,
-				ua:  []int{4, 1, 0},
+				mtx:        mtx1,
+				userAnswer: []int{4, 1, 0},
 			},
 			want: 50,
+			err:  nil,
 		},
 		{
 			name: "mtx 2 vertices disconnected",
 			args: args{
-				mtx: mtx2,
-				ua:  []int{0, 1, 2},
+				mtx:        mtx2,
+				userAnswer: []int{0, 1, 2},
 			},
 			want: 0,
+			err:  errGraphIsNotConnected,
 		},
 		{
 			name: "mtx 3 vertices fully connected",
 			args: args{
-				mtx: mtx3,
-				ua:  []int{0, 1, 2, 4, 3},
+				mtx:        mtx3,
+				userAnswer: []int{0, 1, 2, 4, 3},
 			},
 			want: 100,
+			err:  nil,
 		},
 		{
 			name: "mtx 4 vertices complex",
 			args: args{
-				mtx: mtx4,
-				ua:  []int{0, 3, 4, 2, 1},
+				mtx:        mtx4,
+				userAnswer: []int{0, 3, 4, 2, 1},
 			},
 			want: 85,
+			err:  nil,
 		},
 		{
 			name: "mtx 5 vertices zero weights",
 			args: args{
-				mtx: mtx5,
-				ua:  []int{2, 3},
+				mtx:        mtx5,
+				userAnswer: []int{2, 3},
 			},
 			want: 0,
+			err:  errGraphIsNotConnected,
 		},
 		{
 			name: "mtx 6 vertices with cycles",
 			args: args{
-				mtx: mtx6,
-				ua:  []int{0, 3, 2, 1, 4},
+				mtx:        mtx6,
+				userAnswer: []int{0, 3, 2, 1, 4},
 			},
 			want: 100,
+			err:  nil,
 		},
 		{
 			name: "mtx 7 vertices alternate",
 			args: args{
-				mtx: mtx7,
-				ua:  []int{0, 4, 3, 2, 1},
+				mtx:        mtx7,
+				userAnswer: []int{0, 4, 3, 2, 1},
 			},
 			want: 100,
+			err:  nil,
 		},
 		{
 			name: "mtx 8 vertices increasing weights",
 			args: args{
-				mtx: mtx8,
-				ua:  []int{0, 1, 2, 3, 4},
+				mtx:        mtx8,
+				userAnswer: []int{0, 1, 2, 3, 4},
 			},
 			want: 100,
+			err:  nil,
 		},
 		{
 			name: "mtx 9 vertices complete graph",
 			args: args{
-				mtx: mtx9,
-				ua:  []int{0, 1, 2, 3, 4},
+				mtx:        mtx9,
+				userAnswer: []int{0, 1, 2, 3, 4},
 			},
 			want: 100,
+			err:  nil,
 		},
 		{
 			name: "mtx 10 vertices varying weights",
 			args: args{
-				mtx: mtx10,
-				ua:  []int{0, 1, 2, 3, 4},
+				mtx:        mtx10,
+				userAnswer: []int{0, 1, 2, 3, 4},
 			},
 			want: 100,
+			err:  nil,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := EvalSequence(tt.args.mtx, tt.args.ua)
+			got, err := EvalSequence(tt.args.mtx, tt.args.userAnswer)
+			if !errors.Is(err, tt.err) {
+				t.Errorf("got %v, want %v", err, tt.err)
+			}
+
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -553,7 +572,7 @@ func TestValidateInput(t *testing.T) {
 		name        string
 		matrix      [][]int
 		userAnswer  []int
-		expectValid bool
+		expectValid error
 	}{
 		{
 			name: "Valid input - fully connected graph",
@@ -564,7 +583,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: true,
+			expectValid: nil,
 		},
 		{
 			name: "Invalid input - non-square matrix",
@@ -575,7 +594,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1},
 			},
 			userAnswer:  []int{0, 1, 2},
-			expectValid: false,
+			expectValid: errMatrixIsNotSquare,
 		},
 		{
 			name: "Invalid input - loops in matrix",
@@ -586,7 +605,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errMatrixContainsLoops,
 		},
 		{
 			name: "Invalid input - asymmetric matrix",
@@ -597,7 +616,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errMatrixIsNotSymmetrical,
 		},
 		{
 			name: "Invalid input - negative weights",
@@ -608,7 +627,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errMatrixContainsNegativeValues,
 		},
 		{
 			name: "Invalid input - all zero weights",
@@ -619,7 +638,7 @@ func TestValidateInput(t *testing.T) {
 				{0, 0, 0, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errOnlyZeroValues,
 		},
 		{
 			name: "Invalid input - duplicate answers",
@@ -630,7 +649,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 1, 3},
-			expectValid: false,
+			expectValid: errRepeatedAnswers,
 		},
 		{
 			name: "Invalid input - answers out of range",
@@ -641,7 +660,7 @@ func TestValidateInput(t *testing.T) {
 				{1, 1, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 4, 3},
-			expectValid: false,
+			expectValid: errPutOfRangeValues,
 		},
 		{
 			name: "Invalid input - disconnected graph",
@@ -652,7 +671,7 @@ func TestValidateInput(t *testing.T) {
 				{0, 0, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errGraphIsNotConnected,
 		},
 		{
 			name: "Invalid input - bad graph",
@@ -663,7 +682,7 @@ func TestValidateInput(t *testing.T) {
 				{0, 0, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errMatrixIsNotSymmetrical,
 		},
 		{
 			name: "Invalid input - not symmetric graph",
@@ -674,7 +693,7 @@ func TestValidateInput(t *testing.T) {
 				{0, 9, 1, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errMatrixIsNotSymmetrical,
 		},
 		{
 			name: "Invalid input - not connected graph",
@@ -685,20 +704,20 @@ func TestValidateInput(t *testing.T) {
 				{0, 0, 0, 0},
 			},
 			userAnswer:  []int{0, 1, 2, 3},
-			expectValid: false,
+			expectValid: errGraphIsNotConnected,
 		},
 		{
 			name:        "Valid input - single node",
 			matrix:      [][]int{{0}},
 			userAnswer:  []int{0},
-			expectValid: false,
+			expectValid: errOnlyZeroValues,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			valid := validateInput(tt.matrix, tt.userAnswer)
-			if valid != tt.expectValid {
+			if !errors.Is(valid, tt.expectValid) {
 				t.Errorf("got %v, want %v", valid, tt.expectValid)
 			}
 		})
