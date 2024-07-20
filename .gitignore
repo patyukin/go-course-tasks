@@ -1,3 +1,4 @@
-.idea
+.idea/
+go_build_*
 bin_*
 report.xml
