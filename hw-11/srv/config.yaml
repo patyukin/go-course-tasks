@@ -1,0 +1,11 @@
+rate: 1
+bucket: 5
+global_rate: 10
+global_bucket: 100
+address: "0.0.0.0:7071"
+whitelist:
+  - "192.168.1.100"
+  - "192.168.1.101"
+blacklist:
+  - "192.168.65.1"
+  - "192.168.1.201"
