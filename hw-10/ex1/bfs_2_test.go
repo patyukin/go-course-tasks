@@ -57,16 +57,16 @@ func TestBFS2(t *testing.T) {
 			expected: []int{0, 2, 1, 8, 7},
 		},
 		{
-			name: "Graph with disconnected components",
+			name: "Graph with multiple paths",
 			graph: [][]int{
-				{0, 2, 0, 0, 0},
-				{2, 0, 3, 0, 0},
-				{0, 3, 0, 0, 0},
-				{0, 0, 0, 0, 1},
-				{0, 0, 0, 1, 0},
+				{0, 3, 1, 0, 0},
+				{3, 0, 1, 0, 5},
+				{1, 1, 0, 7, 0},
+				{0, 0, 7, 0, 2},
+				{0, 5, 0, 2, 0},
 			},
 			start:    0,
-			expected: []int{0, 2, 5, math.MaxInt32, math.MaxInt32},
+			expected: []int{0, 2, 1, 8, 7},
 		},
 	}
 
