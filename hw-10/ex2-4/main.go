@@ -1,6 +1,9 @@
 package main
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 // Node - узел 2-3 дерева
 type Node struct {
@@ -124,11 +127,19 @@ func (n *Node) find(key int) *Node {
 		if key == k {
 			return n
 		} else if key < k {
-			return n.children[i].find(key)
+			if i < len(n.children) && n.children[i] != nil {
+				return n.children[i].find(key)
+			}
+
+			return nil
 		}
 	}
 
-	return n.children[len(n.keys)].find(key)
+	if len(n.children) > len(n.keys) && n.children[len(n.keys)] != nil {
+		return n.children[len(n.keys)].find(key)
+	}
+
+	return nil
 }
 
 func main() {
@@ -136,5 +147,13 @@ func main() {
 	keys := []int{10, 20, 5, 6, 15, 30, 25, 35, 4}
 	for _, key := range keys {
 		tree.insert(key)
+	}
+
+	searchKey := 5
+	result := tree.root.find(searchKey)
+	if result != nil {
+		fmt.Printf("Ключ %d наден: %v\n", searchKey, result.keys)
+	} else {
+		fmt.Printf("Ключ %d не найден", searchKey)
 	}
 }
